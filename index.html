@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eufan's Kitchen Favorites</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        :root { --kfc-red: #E4002B; }
+        .kfc-red-bg { background-color: var(--kfc-red); }
+        .kfc-red-text { color: var(--kfc-red); }
+        body { font-family: 'Inter', sans-serif; background-color: #D6C7B2; overflow-x: hidden; }
+        
+        .category-card { transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
+        .category-card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px rgba(0,0,0,0.1); }
+        
+        .product-card { transition: all 0.3s ease; }
+        .product-card:hover { border-color: var(--kfc-red); }
+
+        #cartSidebar { transition: transform 0.3s ease-in-out; transform: translateX(100%); }
+        #cartSidebar.open { transform: translateX(0); }
+
+        .hidden-section { display: none; }
+        .visible-section { display: block; animation: fadeIn 0.4s ease; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .cart-container { position: relative; display: inline-block; cursor: pointer; }
+        #cartCount {
+            position: absolute;
+            top: -5px;
+            right: -10px;
+            background-color: #ff0000;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 12px;
+            font-weight: bold;
+            display: none; 
+            min-width: 15px;
+            text-align: center;
+        }
+        #cartCount.active {
+            display: flex;
+            animation: bounce 0.3s ease;
+        }
+        @keyframes bounce {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.4); }
+            100% { transform: scale(1); }
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--kfc-red);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="text-gray-900">
+
+    <div id="cartOverlay" class="fixed inset-0 bg-black/50 z-50 hidden" onclick="toggleCart()"></div>
+    <div id="cartSidebar" class="fixed right-0 top-0 h-full w-full max-w-sm bg-white z-[60] shadow-2xl flex flex-col">
+        <div class="p-6 border-b flex justify-between items-center bg-gray-50">
+            <h2 class="text-m font-black italic uppercase">Your Orders</h2>
+            <button onclick="toggleCart()" class="text-gray-400 hover:text-black text-2xl font-bold">&times;</button>
+        </div>
+        
+        <div id="cartItemsList" class="flex-1 overflow-y-auto p-4 space-y-4">
+            <p class="text-center text-gray-400 mt-10">Your basket is empty</p>
+        </div>
+
+        <div class="p-6 border-t bg-white">
+            <div class="flex justify-between items-center mb-4">
+                <span class="font-bold">Total:</span>
+                <span id="cartTotal" class="text-xl font-black kfc-red-text">₱0.00</span>
+            </div>
+            <button id="checkoutBtn" onclick="processCheckout()" class="w-full kfc-red-bg text-white py-3 rounded-xl font-bold hover:bg-red-700 transition uppercase tracking-widest">Checkout</button>
+        </div>
+    </div>
+
+    <div id="cookingModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[70] p-4">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
+            <div class="loader"></div>
+            <h3 class="text-m font-black kfc-red-text mb-2 italic uppercase">Cooking Your Order!</h3>
+            
+            <div id="orderSummary" class="text-left bg-gray-50 rounded-xl p-4 mb-4 max-h-48 overflow-y-auto border border-gray-100">
+                <p class="text-xs font-bold uppercase text-gray-400 mb-2">You Ordered:</p>
+                <div id="summaryItems" class="space-y-1"></div>
+                <div class="flex justify-between border-t border-gray-200 mt-2 pt-2">
+                    <span class="text-xs font-bold uppercase text-gray-700">Order Total:</span>
+                    <span id="summaryTotal" class="text-xs font-black kfc-red-text">₱0.00</span>
+                </div>
+            </div>
+
+            <p class="text-gray-600 mb-4 text-sm">We are preparing your flavorful favorites with perfection.</p>
+            
+            <div class="bg-gray-100 p-4 rounded-xl mb-6">
+                <p class="text-xs uppercase font-bold text-gray-400 mb-1">Estimated Ready In</p>
+                <p id="timerDisplay" class="text-3xl font-black text-gray-800">15:00</p>
+            </div>
+
+            <button class="w-full bg-green-600 text-white py-3 rounded-xl font-bold transition uppercase text-sm tracking-widest mb-2 flex items-center justify-center cursor-default">
+                Waiting time...
+            </button>
+
+            <button onclick="document.getElementById('cookingModal').classList.replace('flex', 'hidden')" class="w-full bg-gray-800 text-white py-3 rounded-xl font-bold hover:bg-black transition uppercase text-sm tracking-widest mb-2">
+                Wait Order
+            </button>
+
+            <button onclick="cancelOrder()" class="w-full border-2 border-gray-200 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-50 hover:text-red-600 transition uppercase text-sm tracking-widest">
+                Cancel Order
+            </button>
+        </div>
+    </div>
+
+    <div id="modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4" onclick="closeModal()">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full" onclick="event.stopPropagation()">
+            <h3 class="text-xl font-bold kfc-red-text mb-3">Order Initiation</h3>
+            <p class="text-gray-700 mb-6">Select your preference to begin!</p>
+            <div class="space-y-2">
+                <button onclick="closeModal()" class="w-full kfc-red-bg text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition">Delivery</button>
+                <button onclick="closeModal()" class="w-full border-2 border-gray-200 py-2 rounded-lg font-semibold hover:bg-gray-50 transition">Pick Up</button>
+            </div>
+        </div>
+    </div>
+
+    <header class="bg-white shadow-sm sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+            <div class="flex items-center space-x-6">
+                <div class="text-xl sm:text-2xl font-black kfc-red-text cursor-pointer" onclick="showCategories()">Eufan's Kitchen Favorite</div>
+                <div class="relative hidden md:block">
+                    <input type="text" id="searchInput" onkeyup="handleSearch('searchInput')" placeholder="Search menu..." 
+                        class="pl-10 pr-4 py-1.5 border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-red-500 w-64">
+                    <svg class="w-4 h-4 absolute left-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="cart-container">
+                    <button onclick="toggleCart()" class="p-2 rounded-full hover:bg-gray-100 relative">
+                        <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        <span id="cartCount">0</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="md:hidden bg-white px-4 py-3 border-b border-gray-100">
+        <div class="relative">
+            <input type="text" id="mobileSearchInput" onkeyup="handleSearch('mobileSearchInput')" placeholder="Search flavorful menu..." 
+                class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+            <svg class="w-4 h-4 absolute left-3 top-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        </div>
+    </div>
+
+    <section class="kfc-red-bg text-white py-14">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-8">
+            <div class="md:w-1/2">
+                <h1 class="text-4xl md:text-5xl font-black mb-4">Flavorful Favorites,<br>Made Fresh Daily</h1>
+                <p class="text-sm md:text-base opacity-90 mb-6">Order for delivery, pickup, or dine-in today.</p>
+                <div class="flex gap-4">
+                    <button onclick="openModal()" class="bg-white text-[#E4002B] font-bold px-8 py-3 rounded-full hover:scale-105 transition shadow-lg">
+                        Order Now
+                    </button>
+                </div>
+            </div>
+            <div class="md:w-1/2 flex justify-center md:justify-end">
+                <img src="Eufan's Kitchen Favorite.jpg" alt="KFC Dish" class="w-full max-w-md rounded-lg shadow-lg">
+            </div>
+        </div>
+    </section>
+
+    <div class="bg-white border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p class="text-sm font-bold uppercase tracking-tight">Let's order for Delivery, Pick up, or Dine-in</p>
+            <button onclick="openModal()" class="kfc-red-bg text-white font-bold py-2 px-8 rounded-full shadow-lg hover:scale-105 transition">Start Order</button>
+        </div>
+    </div>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <section id="categoriesSection" class="visible-section">
+            <h2 class="text-x font-black mb-8 tracking-tight italic uppercase">BROWSE CATEGORIES</h2>
+            <div id="categoriesGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6"></div>
+        </section>
+
+        <section id="itemsSection" class="hidden-section">
+            <div class="flex items-center justify-between mb-8">
+                <button onclick="showCategories()" class="flex items-center text-sm font-bold text-gray-500 hover:text-black transition">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    BACK TO CATEGORIES
+                </button>
+                <h2 id="sectionTitle" class="text-2xl font-black tracking-tight kfc-red-text italic uppercase"></h2>
+            </div>
+            <div id="itemsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6"></div>
+        </section>
+    </main>
+
+    <script>
+        const categoriesData = {
+            'burgers': { title: 'International Burger Fest', items: [{ id: 1, name: 'Zinger Burger', price: 169, img: 'zinger burger .jpg' }, { id: 2, name: 'Tower Burger', price: 199, img: 'TOWER BURGER.jpg' }, { id: 3, name: 'BBQ Bacon Burger', price: 229, img: 'BBQ BACON BURGER.jpg' }, { id: 4, name: 'Cheese Supreme', price: 249, img: 'CHEESE SUPREME.png' }, { id: 5, name: 'Veggie Deluxe', price: 239, img: 'VEGGIES DELUXE.png' }] },
+            'box-meals': { title: 'Box Meals', color: 'bg-red-50', items: [{ id: 6, name: 'Fully Loaded Box', price: 299, img: 'FULLY LOADED BOX.png' }, { id: 7, name: 'Wicked Wing Box', price: 215, img: 'WICKED WING BOX.jpg' }, { id: 8, name: 'Zinger Box', price: 269, img: 'ZINGER BOX.jpg' }, { id: 9, name: 'Twister Box', price: 185, img: 'TWISTER BOX.jpg' }, { id: 10, name: 'Variety Box', price: 329, img: 'VARIETY BOX.jpg' }] },
+            'chicken-buckets': { title: 'Chicken Buckets', color: 'bg-orange-50', items: [{ id: 11, name: '6pc Bucket', price: 539, img: '6PCS BUCKET (2).png' }, { id: 12, name: '10pc Bucket', price: 809, img: '15PCS BUCKET.png' }, { id: 13, name: '15pc Bucket', price: 1144, img: '10PCS BUCKET.png' }, { id: 14, name: 'Party Bucket', price: 1474, img: 'PARTY BUCKET.png' }, { id: 15, name: 'Wing Bucket', price: 1134, img: 'WING BUCKET.png' }] },
+            'match-day': { title: 'Match Day Combo', color: 'bg-red', items: [{ id: 16, name: 'Stadium Combo', price: 294, img: 'STADIUM COMBO.png' }, { id: 17, name: 'Quarterback Meal', price: 249, img: 'QUARTERBACK MEAL.png' }, { id: 18, name: 'Fan Favorite', price: 259, img: 'FAN FAVORITE.png' }, { id: 19, name: 'MVP Bucket', price: 809, img: 'MVP BUCKET MEAL .png' }, { id: 20, name: 'Rookie Box', price: 179, img: 'ROOKIE BOX.jpg' }] }
+        };
+
+        let cart = [];
+        let cookingInterval;
+
+        function toggleCart() {
+            document.getElementById('cartSidebar').classList.toggle('open');
+            document.getElementById('cartOverlay').classList.toggle('hidden');
+        }
+
+        function initCategories() {
+            const grid = document.getElementById('categoriesGrid');
+            grid.innerHTML = '';
+            Object.keys(categoriesData).forEach(key => {
+                const cat = categoriesData[key];
+                grid.innerHTML += `<div onclick="showItems('${key}')" class="category-card bg-white rounded-xl overflow-hidden shadow-md border border-gray-100"><div class="aspect-square ${cat.color || ''} p-4 text-center"><img src="${cat.items[0].img}" class="w-full h-full object-contain rounded-lg"></div><div class="p-4 text-center font-bold text-sm uppercase">${cat.title}</div></div>`;
+            });
+            grid.innerHTML += `<div onclick="showItems('all')" class="category-card bg-white rounded-xl overflow-hidden shadow-md border-2 border-dashed border-red-200 p-6 flex flex-col justify-center items-center text-center"><p class="text-xl font-serif font-bold italic kfc-red-text mb-4">"Flavorful Favorites,<br>Savor the Taste of Perfection."</p><span class="text-xs font-black underline uppercase">View All Menu →</span></div>`;
+        }
+
+        function renderProducts(products) {
+            const grid = document.getElementById('itemsGrid');
+            grid.innerHTML = products.length ? '' : '<p class="col-span-full text-center py-10 text-gray-400">No flavorful matches found. Try another search!</p>';
+            products.forEach(item => {
+                grid.innerHTML += `<div class="product-card bg-white rounded-2xl p-4 border border-transparent shadow-sm hover:shadow-xl"><img src="${item.img}" class="w-full aspect-square object-cover rounded-xl mb-4"><h4 class="font-bold mb-1">${item.name}</h4><p class="kfc-red-text font-black text-xl mb-4">₱${item.price.toFixed(2)}</p><div class="flex items-center justify-between mb-4 bg-gray-50 rounded-lg p-1"><button onclick="changeQty('qty-${item.id}', -1)" class="w-8 h-8 font-bold">-</button><input type="text" id="qty-${item.id}" value="1" readonly class="bg-transparent text-center w-8 font-bold text-sm"><button onclick="changeQty('qty-${item.id}', 1)" class="w-8 h-8 font-bold">+</button></div><button onclick="addToCart(${item.id}, 'qty-${item.id}')" class="w-full kfc-red-bg text-white py-2 rounded-lg font-bold text-sm">ADD TO CART</button></div>`;
+            });
+        }
+
+        function changeQty(id, delta) {
+            const input = document.getElementById(id);
+            let val = parseInt(input.value) + delta;
+            if (val >= 1) input.value = val;
+        }
+
+        function addToCart(id, qtyInputId) {
+            const qty = parseInt(document.getElementById(qtyInputId).value);
+            let product = null;
+            Object.values(categoriesData).forEach(cat => {
+                const found = cat.items.find(i => i.id === id);
+                if(found) product = found;
+            });
+            const existing = cart.find(c => c.id === id);
+            if(existing) existing.quantity += qty;
+            else cart.push({...product, quantity: qty});
+            updateCartUI();
+            const btn = event.target;
+            btn.innerText = `ADDED ${qty}!`;
+            setTimeout(() => { btn.innerText = "ADD TO CART"; document.getElementById(qtyInputId).value = 1; }, 800);
+        }
+
+        function updateCartUI() {
+            const list = document.getElementById('cartItemsList');
+            const totalLabel = document.getElementById('cartTotal');
+            const badge = document.getElementById('cartCount');
+            let total = 0, count = 0;
+            if(cart.length === 0) {
+                list.innerHTML = '<p class="text-center text-gray-400 mt-10">Your basket is empty</p>';
+                badge.classList.remove('active');
+                badge.innerText = "0";
+            } else {
+                list.innerHTML = '';
+                cart.forEach((item, index) => {
+                    total += item.price * item.quantity;
+                    count += item.quantity;
+                    list.innerHTML += `<div class="flex items-center gap-3 bg-gray-50 p-3 rounded-xl"><img src="${item.img}" class="w-12 h-12 rounded-lg"><div class="flex-1"><h4 class="font-bold text-xs">${item.name}</h4><p class="text-xs kfc-red-text font-black">₱${(item.price * item.quantity).toFixed(2)}</p></div><div class="flex items-center bg-white border rounded-md text-xs font-bold"><button onclick="updateCartQty(${index}, -1)" class="px-2">-</button><span class="px-1">${item.quantity}</span><button onclick="updateCartQty(${index}, 1)" class="px-2">+</button></div></div>`;
+                });
+                badge.innerText = count;
+                badge.classList.add('active');
+            }
+            totalLabel.innerText = `₱${total.toFixed(2)}`;
+        }
+
+        function updateCartQty(index, delta) {
+            cart[index].quantity += delta;
+            if (cart[index].quantity <= 0) cart.splice(index, 1);
+            updateCartUI();
+        }
+
+        function handleSearch(inputId) {
+            const query = document.getElementById(inputId).value.toLowerCase();
+            
+            if (query.length > 0) {
+                // Show items section and hide categories
+                document.getElementById('categoriesSection').classList.replace('visible-section', 'hidden-section');
+                document.getElementById('itemsSection').classList.replace('hidden-section', 'visible-section');
+                document.getElementById('sectionTitle').innerText = "Search Results";
+                
+                // Get all items from all categories
+                let allItems = [];
+                Object.values(categoriesData).forEach(cat => allItems.push(...cat.items));
+                
+                // Filter and render
+                const filtered = allItems.filter(item => item.name.toLowerCase().includes(query));
+                renderProducts(filtered);
+            } else {
+                // Return to categories if search is empty
+                showCategories();
+            }
+        }
+
+        function showItems(key) {
+            document.getElementById('categoriesSection').classList.replace('visible-section', 'hidden-section');
+            document.getElementById('itemsSection').classList.replace('hidden-section', 'visible-section');
+            const title = document.getElementById('sectionTitle');
+            let items = [];
+            if (key === 'all') { title.innerText = "Full Menu"; Object.values(categoriesData).forEach(cat => items.push(...cat.items)); }
+            else { title.innerText = categoriesData[key].title; items = categoriesData[key].items; }
+            renderProducts(items);
+        }
+
+        function showCategories() {
+            document.getElementById('itemsSection').classList.replace('visible-section', 'hidden-section');
+            document.getElementById('categoriesSection').classList.replace('hidden-section', 'visible-section');
+            // Reset search inputs when navigating back
+            document.getElementById('searchInput').value = '';
+            document.getElementById('mobileSearchInput').value = '';
+        }
+
+        function openModal() { document.getElementById('modal').classList.replace('hidden', 'flex'); }
+        function closeModal() { document.getElementById('modal').classList.replace('flex', 'hidden'); }
+
+        function processCheckout() {
+            if (cart.length === 0) { alert("Your basket is empty!"); return; }
+            const summaryDiv = document.getElementById('summaryItems');
+            const summaryTotal = document.getElementById('summaryTotal'); 
+            summaryDiv.innerHTML = '';
+            let finalTotal = 0;
+
+            cart.forEach(item => {
+                let itemSubtotal = item.price * item.quantity;
+                finalTotal += itemSubtotal;
+                summaryDiv.innerHTML += `
+                    <div class="flex justify-between text-xs py-1 border-b border-gray-100 last:border-0">
+                        <span class="font-medium text-gray-700">${item.quantity}x ${item.name}</span>
+                        <span class="font-black kfc-red-text">₱${itemSubtotal.toFixed(2)}</span>
+                    </div>`;
+            });
+
+            summaryTotal.innerText = `₱${finalTotal.toFixed(2)}`; 
+            toggleCart();
+            cart = []; 
+            updateCartUI(); 
+            document.getElementById('cookingModal').classList.replace('hidden', 'flex');
+            startTimer(900);
+        }
+
+        function startTimer(duration) {
+            let timer = duration, minutes, seconds;
+            const display = document.getElementById('timerDisplay');
+            clearInterval(cookingInterval);
+            cookingInterval = setInterval(() => {
+                minutes = parseInt(timer / 60, 10);
+                seconds = parseInt(timer % 60, 10);
+                minutes = minutes < 10 ? "0" + minutes : minutes;
+                seconds = seconds < 10 ? "0" + seconds : seconds;
+                display.textContent = minutes + ":" + seconds;
+                if (--timer < 0) {
+                    clearInterval(cookingInterval);
+                    alert("Order is ready! Enjoy your Flavorful Favorites!");
+                    cancelOrder();
+                }
+            }, 1000);
+        }
+
+        function cancelOrder() {
+            clearInterval(cookingInterval);
+            document.getElementById('cookingModal').classList.replace('flex', 'hidden');
+        }
+
+        initCategories();
+    </script>
+</body>
+</html>
